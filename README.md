@@ -76,3 +76,12 @@ Each platform downloads a **separate Excel file** — no combined sheet.
 - BigBasket: Fast (API-based interception)
 - Flipkart: Slower (DOM scraping, 5–15 min depending on review count)
 - Use "Scrape Until Date" (DD-MM-YYYY) to limit how far back reviews are collected
+
+---
+
+## Setup Instructions
+1. Clone the repo
+2. Copy `.env.example` → `.env`
+3. Fill in your API keys in `.env`
+4. Backend: `pip install -r requirements.txt`
+5. Frontend: `npm install`
