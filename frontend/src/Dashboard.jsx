@@ -1,148 +1,115 @@
-﻿import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
-} from "recharts";
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
-
-const COLORS = ["#ef4444","#f97316","#eab308","#22c55e","#16a34a"];
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export default function Dashboard() {
-  const [reviews, setReviews]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [search,  setSearch]    = useState("");
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [platform, setPlatform] = useState("all");
+  const [ratingFilter, setRatingFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 20;
 
-  useEffect(() => {
-    async function load() {
-      const { data } = await supabase
-        .from("reviews")
-        .select("*")
-        .order("scraped_at", { ascending: false });
-      setReviews(data || []);
-      setLoading(false);
-    }
-    load();
-  }, []);
+  useEffect(() => { fetchReviews(); }, [page, platform, ratingFilter, search]);
 
-  const total   = reviews.length;
-  const bbCount = reviews.filter(r => r.platform === "bigbasket").length;
-  const fkCount = reviews.filter(r => r.platform === "flipkart").length;
-  const avgRating = total
-    ? (reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0) / total).toFixed(2)
-    : 0;
+  async function fetchReviews() {
+    setLoading(true);
+    let query = supabase.from("reviews").select("*", { count: "exact" })
+      .order("date", { ascending: false })
+      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+    if (platform !== "all") query = query.eq("platform", platform);
+    if (ratingFilter !== "all") query = query.eq("rating", parseInt(ratingFilter));
+    if (search) query = query.ilike("review_text", `%${search}%`);
+    const { data, count, error } = await query;
+    if (!error) { setReviews(data || []); setTotal(count || 0); }
+    setLoading(false);
+  }
 
-  const ratingDist = [1,2,3,4,5].map(star => ({
-    name: `${star}★`,
-    count: reviews.filter(r => Number(r.rating) === star).length
-  }));
-
-  const platformData = [
-    { name: "BigBasket", value: bbCount },
-    { name: "Flipkart",  value: fkCount }
-  ];
-
-  const filtered = reviews.filter(r =>
-    (r.product_name || r.product_url || "").toLowerCase().includes(search.toLowerCase()) ||
-    (r.review_text || "").toLowerCase().includes(search.toLowerCase())
-  );
-
-  if (loading) return (
-    <div style={{color:"#4ade80",textAlign:"center",padding:"4rem",fontFamily:"monospace"}}>
-      Loading dashboard...
-    </div>
-  );
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const avgRating = reviews.filter(r => r.rating).length
+    ? (reviews.reduce((s, r) => s + (parseFloat(r.rating) || 0), 0) / reviews.filter(r => r.rating).length).toFixed(1)
+    : "0";
+  const starColor = (r) => r >= 4 ? "#4ade80" : r >= 3 ? "#facc15" : "#f87171";
 
   return (
-    <div style={{background:"#0a0a0a",minHeight:"100vh",padding:"2rem",fontFamily:"monospace",color:"#e5e5e5"}}>
-      <h1 style={{color:"#4ade80",fontSize:"2rem",marginBottom:"0.5rem"}}>📊 Reviews Dashboard</h1>
-      <p style={{color:"#6b7280",marginBottom:"2rem"}}>Supabase मधून live data</p>
-
-      {/* Stats Cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"1rem",marginBottom:"2rem"}}>
-        {[
-          { label:"Total Reviews", value: total,     color:"#4ade80" },
-          { label:"BigBasket",     value: bbCount,   color:"#22c55e" },
-          { label:"Flipkart",      value: fkCount,   color:"#f97316" },
-          { label:"Avg Rating",    value: avgRating, color:"#eab308" },
-        ].map(c => (
-          <div key={c.label} style={{background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"1.5rem"}}>
-            <div style={{color:"#6b7280",fontSize:"0.75rem",marginBottom:"0.5rem"}}>{c.label}</div>
-            <div style={{color:c.color,fontSize:"2rem",fontWeight:"bold"}}>{c.value}</div>
+    <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#e5e5e5", fontFamily:"monospace", padding:"24px" }}>
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:28, fontWeight:700, color:"#4ade80", margin:0 }}>📊 Reviews Dashboard</h1>
+        <p style={{ color:"#666", margin:"4px 0 0" }}>Supabase · Live Data · {total} reviews</p>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, marginBottom:24 }}>
+        {[["TOTAL REVIEWS", total], ["AVG RATING", avgRating], ["PLATFORMS", "BB + FK"]].map(([label, value]) => (
+          <div key={label} style={{ background:"#111", border:"1px solid #222", borderRadius:8, padding:"16px 20px" }}>
+            <div style={{ fontSize:11, color:"#666", marginBottom:6 }}>{label}</div>
+            <div style={{ fontSize:28, fontWeight:700, color:"#4ade80" }}>{value}</div>
           </div>
         ))}
       </div>
-
-      {/* Charts */}
-      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:"1rem",marginBottom:"2rem"}}>
-        <div style={{background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"1.5rem"}}>
-          <h3 style={{color:"#4ade80",marginBottom:"1rem"}}>Rating Distribution</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={ratingDist}>
-              <XAxis dataKey="name" stroke="#6b7280"/>
-              <YAxis stroke="#6b7280"/>
-              <Tooltip contentStyle={{background:"#111",border:"1px solid #333"}}/>
-              <Bar dataKey="count" fill="#4ade80" radius={[4,4,0,0]}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"1.5rem"}}>
-          <h3 style={{color:"#4ade80",marginBottom:"1rem"}}>Platform Split</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={platformData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
-                {platformData.map((_, i) => <Cell key={i} fill={["#22c55e","#f97316"][i]}/>)}
-              </Pie>
-              <Legend/>
-              <Tooltip contentStyle={{background:"#111",border:"1px solid #333"}}/>
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+      <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
+        <input placeholder="Search reviews..." value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          style={{ flex:1, minWidth:200, background:"#111", border:"1px solid #333", borderRadius:6, padding:"8px 12px", color:"#e5e5e5", fontSize:13 }} />
+        <select value={platform} onChange={(e) => { setPlatform(e.target.value); setPage(1); }}
+          style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"8px 12px", color:"#e5e5e5" }}>
+          <option value="all">All Platforms</option>
+          <option value="bigbasket">BigBasket</option>
+          <option value="flipkart">Flipkart</option>
+        </select>
+        <select value={ratingFilter} onChange={(e) => { setRatingFilter(e.target.value); setPage(1); }}
+          style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"8px 12px", color:"#e5e5e5" }}>
+          <option value="all">All Ratings</option>
+          {[5,4,3,2,1].map(r => <option key={r} value={r}>{r} Star</option>)}
+        </select>
       </div>
-
-      {/* Search + Table */}
-      <div style={{background:"#111",border:"1px solid #222",borderRadius:"8px",padding:"1.5rem"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
-          <h3 style={{color:"#4ade80"}}>Recent Reviews</h3>
-          <input
-            placeholder="Search..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{background:"#1a1a1a",border:"1px solid #333",borderRadius:"6px",padding:"0.5rem 1rem",color:"#e5e5e5",outline:"none"}}
-          />
-        </div>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.8rem"}}>
-            <thead>
-              <tr style={{borderBottom:"1px solid #333"}}>
-                {["Platform","Rating","Product","Review","Date"].map(h => (
-                  <th key={h} style={{padding:"0.75rem",textAlign:"left",color:"#6b7280"}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0,50).map((r,i) => (
-                <tr key={i} style={{borderBottom:"1px solid #1a1a1a"}}>
-                  <td style={{padding:"0.75rem"}}>
-                    <span style={{background: r.platform==="bigbasket"?"#14532d":"#431407",color: r.platform==="bigbasket"?"#4ade80":"#f97316",padding:"2px 8px",borderRadius:"4px",fontSize:"0.7rem"}}>
-                      {r.platform}
-                    </span>
-                  </td>
-                  <td style={{padding:"0.75rem",color:"#eab308",fontWeight:"bold"}}>{r.rating}★</td>
-                  <td style={{padding:"0.75rem",color:"#9ca3af",maxWidth:"150px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.product_name || "-"}</td>
-                  <td style={{padding:"0.75rem",maxWidth:"300px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.review_text || r.review_header || "-"}</td>
-                  <td style={{padding:"0.75rem",color:"#6b7280"}}>{r.date || "-"}</td>
-                </tr>
+      <div style={{ background:"#111", border:"1px solid #222", borderRadius:8, overflow:"hidden" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <thead>
+            <tr style={{ background:"#1a1a1a", borderBottom:"1px solid #222" }}>
+              {["Rating","Header","Review","Product","Date","Platform"].map(h => (
+                <th key={h} style={{ padding:"12px 16px", textAlign:"left", color:"#666", fontWeight:600, fontSize:11, textTransform:"uppercase" }}>{h}</th>
               ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && <p style={{textAlign:"center",color:"#6b7280",padding:"2rem"}}>No reviews found</p>}
-        </div>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} style={{ textAlign:"center", padding:40, color:"#666" }}>Loading...</td></tr>
+            ) : reviews.length === 0 ? (
+              <tr><td colSpan={6} style={{ textAlign:"center", padding:40, color:"#666" }}>No reviews found</td></tr>
+            ) : reviews.map((r, i) => (
+              <tr key={r.id || i} style={{ borderBottom:"1px solid #1a1a1a", background: i%2===0 ? "#111" : "#0f0f0f" }}>
+                <td style={{ padding:"10px 16px" }}>
+                  <span style={{ color:starColor(r.rating), fontWeight:700, fontSize:15 }}>{r.rating || "—"}</span>
+                </td>
+                <td style={{ padding:"10px 16px", maxWidth:150, color:"#ccc" }}>{(r.review_header||"").slice(0,40)||"—"}</td>
+                <td style={{ padding:"10px 16px", maxWidth:300, color:"#aaa", lineHeight:1.4 }}>
+                  {(r.review_text||"").slice(0,100)}{(r.review_text||"").length>100?"...":""}
+                </td>
+                <td style={{ padding:"10px 16px", color:"#888" }}>{(r.product_name||"").slice(0,25)||"—"}</td>
+                <td style={{ padding:"10px 16px", color:"#666", whiteSpace:"nowrap" }}>{r.date?r.date.slice(0,10):"—"}</td>
+                <td style={{ padding:"10px 16px" }}>
+                  <span style={{ background:r.platform==="bigbasket"?"#14532d":"#3b0764", color:r.platform==="bigbasket"?"#4ade80":"#a78bfa", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>
+                    {r.platform==="bigbasket"?"BB":"FK"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+      {totalPages > 1 && (
+        <div style={{ display:"flex", justifyContent:"center", gap:8, marginTop:20, alignItems:"center" }}>
+          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}
+            style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"6px 16px", color:"#e5e5e5", cursor:"pointer" }}>← Prev</button>
+          <span style={{ color:"#666", fontSize:13 }}>Page {page} of {totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}
+            style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"6px 16px", color:"#e5e5e5", cursor:"pointer" }}>Next →</button>
+        </div>
+      )}
     </div>
   );
 }
