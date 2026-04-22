@@ -7,3 +7,8 @@ __pycache__/
 *backup.py
 node_modules/
 frontend/node_modules/
+venv/
+backend/venv/
+backend/fix.py
+*.pyc
+__pycache__/
