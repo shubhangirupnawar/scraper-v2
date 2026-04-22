@@ -431,6 +431,38 @@ async def scrape_bigbasket(sku: int, slug: str, until_date=None):
                 continue
             await asyncio.sleep(5)  # wait for JS hydration
 
+            # Extra: Try direct JSON API endpoint
+            try:
+                api_resp = await page.evaluate("""
+                    async () => {
+                        try {
+                            const u = window.location.href;
+                            const pg = (u.match(/page=(\d+)/) || [,1])[1];
+                            const skuMatch = u.match(/product-reviews\/(\d+)/);
+                            if (!skuMatch) return null;
+                            const r = await fetch(`https://www.bigbasket.com/product-reviews/api/v1/reviews/?product_id=${skuMatch[1]}&page=${pg}&page_size=10`, {
+                                headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                                credentials: "include"
+                            });
+                            if (r.ok) return await r.json();
+                        } catch(e) {}
+                        return null;
+                    }
+                """)
+                if api_resp and isinstance(api_resp, dict):
+                    for k in ("reviews", "top_reviews", "review_list", "data", "results"):
+                        for r in (api_resp.get(k) or []):
+                            if isinstance(r, dict) and "review_id" in r:
+                                all_reviews[r["review_id"]] = _bb_normalise_review(r)
+                    rnr_b = api_resp.get("rnr", {})
+                    if isinstance(rnr_b, dict):
+                        for k in ("reviews", "top_reviews"):
+                            for r in (rnr_b.get(k) or []):
+                                if isinstance(r, dict) and "review_id" in r:
+                                    all_reviews[r["review_id"]] = _bb_normalise_review(r)
+            except Exception:
+                pass
+
             prev_count = len(all_reviews)
 
             # Primary: get reviews from __PRELOADED_STATE__
