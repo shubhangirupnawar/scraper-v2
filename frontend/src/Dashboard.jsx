@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 export default function Dashboard() {
   const [reviews, setReviews] = useState([]);
@@ -13,20 +13,23 @@ export default function Dashboard() {
   const [ratingFilter, setRatingFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 10;
 
   useEffect(() => { fetchReviews(); }, [page, platform, ratingFilter, search]);
 
   async function fetchReviews() {
+    if (!supabase) { setLoading(false); return; }
     setLoading(true);
-    let query = supabase.from("reviews").select("*", { count: "exact" })
-      .order("date", { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+    let query = supabase.from("reviews").select("*", { count: "exact" });
     if (platform !== "all") query = query.eq("platform", platform);
     if (ratingFilter !== "all") query = query.eq("rating", parseInt(ratingFilter));
     if (search) query = query.ilike("review_text", `%${search}%`);
+    query = query.order("date", { ascending: false })
+      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
     const { data, count, error } = await query;
+    console.log("Supabase result:", { data, count, error });
     if (!error) { setReviews(data || []); setTotal(count || 0); }
+    else console.error("Supabase error:", error);
     setLoading(false);
   }
 
@@ -35,6 +38,16 @@ export default function Dashboard() {
     ? (reviews.reduce((s, r) => s + (parseFloat(r.rating) || 0), 0) / reviews.filter(r => r.rating).length).toFixed(1)
     : "0";
   const starColor = (r) => r >= 4 ? "#4ade80" : r >= 3 ? "#facc15" : "#f87171";
+
+  if (!supabase) return (
+    <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#e5e5e5", fontFamily:"monospace", padding:"24px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ textAlign:"center", color:"#f87171" }}>
+        <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
+        <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>Supabase not configured</div>
+        <div style={{ fontSize:12, color:"#666" }}>Add VITE_SUPABASE_URL and VITE_SUPABASE_KEY to frontend/.env and restart the dev server.</div>
+      </div>
+    </div>
+  )
 
   return (
     <div style={{ minHeight:"100vh", background:"#0a0a0a", color:"#e5e5e5", fontFamily:"monospace", padding:"24px" }}>
@@ -101,15 +114,13 @@ export default function Dashboard() {
           </tbody>
         </table>
       </div>
-      {totalPages > 1 && (
-        <div style={{ display:"flex", justifyContent:"center", gap:8, marginTop:20, alignItems:"center" }}>
-          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}
-            style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"6px 16px", color:"#e5e5e5", cursor:"pointer" }}>← Prev</button>
-          <span style={{ color:"#666", fontSize:13 }}>Page {page} of {totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}
-            style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"6px 16px", color:"#e5e5e5", cursor:"pointer" }}>Next →</button>
-        </div>
-      )}
+      <div style={{ display:"flex", justifyContent:"center", gap:8, marginTop:20, alignItems:"center" }}>
+        <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}
+          style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"6px 16px", color: page===1?"#444":"#e5e5e5", cursor: page===1?"not-allowed":"pointer" }}>← Prev</button>
+        <span style={{ color:"#666", fontSize:13 }}>Page {page} of {totalPages || 1}</span>
+        <button onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages || totalPages===0}
+          style={{ background:"#111", border:"1px solid #333", borderRadius:6, padding:"6px 16px", color:(page===totalPages||totalPages===0)?"#444":"#e5e5e5", cursor:(page===totalPages||totalPages===0)?"not-allowed":"pointer" }}>Next →</button>
+      </div>
     </div>
   );
 }

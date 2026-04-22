@@ -205,6 +205,17 @@ export default function App() {
   const cardBorder = p ? p.border : 'rgba(74,222,128,0.2)'
   const cardGlow = p ? p.glow : 'rgba(74,222,128,0.06)'
 
+  if (showDashboard) return (
+    <div>
+      <div style={{ background: '#0a0a0a', borderBottom: '1px solid #1a1a1a', padding: '12px 24px' }}>
+        <button onClick={() => setShowDashboard(false)} style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '20px', padding: '6px 16px', fontSize: '12px', fontFamily: 'monospace', color: '#4ade80', cursor: 'pointer' }}>
+          ← Back to Scraper
+        </button>
+      </div>
+      <Dashboard />
+    </div>
+  )
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -231,6 +242,11 @@ export default function App() {
 
         {/* Top badge */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+            <button onClick={() => setShowDashboard(true)} style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '20px', padding: '6px 16px', fontSize: '12px', fontFamily: 'monospace', color: '#4ade80', cursor: 'pointer' }}>
+              📊 View Dashboard
+            </button>
+          </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '100px', padding: '6px 18px', marginBottom: '20px', fontSize: '11px', fontFamily: 'monospace', color: '#4ade80', letterSpacing: '0.1em' }}>
             <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80', animation: 'blink 1.4s ease infinite' }} />
             PLAYWRIGHT · FASTAPI · REACT
