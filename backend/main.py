@@ -1,12 +1,18 @@
-﻿from dotenv import load_dotenv
+﻿import asyncio
+import sys
+
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+from dotenv import load_dotenv
 load_dotenv()
 
 """
-BigBasket + Flipkart Reviews Scraper — FastAPI Backend
+BigBasket + Flipkart Reviews Scraper � FastAPI Backend
 Merged best logic from:
-  - bigbasket/scrapping.py  → ReviewAPICapture, scroll loop, until_date, product summary
-  - flipkart/scrap.py       → parse_relative_date, HTML parsing, DUMP_JS card extractor
-  - scraper-v2/main.py      → FastAPI structure, Excel builder, unified column schema
+  - bigbasket/scrapping.py  ? ReviewAPICapture, scroll loop, until_date, product summary
+  - flipkart/scrap.py       ? parse_relative_date, HTML parsing, DUMP_JS card extractor
+  - scraper-v2/main.py      ? FastAPI structure, Excel builder, unified column schema
 """
 
 import os
@@ -40,7 +46,7 @@ class ScrapeRequest(BaseModel):
     until_date: str = ""   # optional DD-MM-YYYY or YYYY-MM-DD
 
 
-# ── Shared column schema ───────────────────────────────────────────────────────
+# -- Shared column schema -------------------------------------------------------
 
 COLUMNS = [
     "review_id", "rating", "review_header", "review_text", "review_combine",
@@ -112,9 +118,9 @@ def parse_until_date(date_str: str):
     return None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 # BIGBASKET
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 
 def parse_bigbasket_url(url: str):
     # /product-reviews/SKU/slug
@@ -138,7 +144,7 @@ def parse_bigbasket_url(url: str):
     raise ValueError("Could not extract product SKU from BigBasket URL.")
 
 
-# ── Shared date helpers (from bigbasket/scrapping.py) ─────────────────────────
+# -- Shared date helpers (from bigbasket/scrapping.py) -------------------------
 
 def _bb_reached_cutoff(reviews_dict: dict, until_date) -> bool:
     if until_date is None:
@@ -174,7 +180,7 @@ def _bb_filter_by_date(reviews_dict: dict, until_date) -> dict:
     return filtered
 
 
-# ── Network interceptor (from bigbasket/scrapping.py) ─────────────────────────
+# -- Network interceptor (from bigbasket/scrapping.py) -------------------------
 
 class ReviewAPICapture:
     def __init__(self):
@@ -277,7 +283,7 @@ async def _bb_scrape_product_summary(page: Page) -> dict:
 async def scrape_bigbasket(sku: int, slug: str, until_date=None):
     """
     Scrape BigBasket reviews using:
-    1. Network interception (ReviewAPICapture) — fastest
+    1. Network interception (ReviewAPICapture) � fastest
     2. window.__PRELOADED_STATE__ parsing
     3. Scroll loop for lazy-loaded reviews
     4. Paginated API fetch using captured endpoint
@@ -375,7 +381,7 @@ async def scrape_bigbasket(sku: int, slug: str, until_date=None):
         except Exception as e:
             print(f"[BB] PRELOADED_STATE error: {e}")
 
-        # ── Paginate all review pages directly ───────────────────────────
+        # -- Paginate all review pages directly ---------------------------
         max_pages = max(150, (total_count // 10) + 5) if total_count else 150
         print(f"[BB] Will paginate up to {max_pages} pages...")
 
@@ -473,7 +479,7 @@ async def scrape_bigbasket(sku: int, slug: str, until_date=None):
 
         # (pagination handled above in page loop)
 
-        # ── DOM fallback if nothing scraped yet ────────────────────────────
+        # -- DOM fallback if nothing scraped yet ----------------------------
         if not all_reviews:
             for pg in range(1, 51):
                 try:
@@ -598,16 +604,16 @@ def build_bigbasket_excel(reviews: list, summary: dict, slug: str, product_url: 
     return buf.read()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 # FLIPKART
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 
 def parse_relative_date(raw: str):
     """Convert Flipkart relative dates ('5 days ago', '2 months ago') to datetime.
-    From flipkart/scrap.py — handles relative + absolute formats.
+    From flipkart/scrap.py � handles relative + absolute formats.
     """
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    raw = raw.strip().lstrip("·").strip().lower()
+    raw = raw.strip().lstrip("�").strip().lower()
 
     m = re.match(r"(\d+)\s+(day|week|month|year)s?\s+ago", raw)
     if m:
@@ -641,7 +647,7 @@ def parse_flipkart_url(url: str):
     raise ValueError("Could not parse Flipkart URL. Please use a product or review page URL.")
 
 
-# ── JS card extractor (enhanced from scraper-v2/main.py DUMP_JS) ──────────────
+# -- JS card extractor (enhanced from scraper-v2/main.py DUMP_JS) --------------
 
 DUMP_JS = r"""
 () => {
@@ -755,7 +761,7 @@ def parse_flipkart_card(rating, text, media=None):
     }
 
     def is_junk(l):
-        return (l in junk or re.fullmatch(r"[\d,\.★\s]+", l) or len(l) < 2)
+        return (l in junk or re.fullmatch(r"[\d,\.?\s]+", l) or len(l) < 2)
 
     # Find date line
     date_str = ""
@@ -764,7 +770,7 @@ def parse_flipkart_card(rating, text, media=None):
             date_str = l
             break
 
-    # Parse date → YYYY-MM-DD
+    # Parse date ? YYYY-MM-DD
     parsed_date = ""
     if date_str:
         dt = parse_relative_date(date_str)
@@ -781,7 +787,7 @@ def parse_flipkart_card(rating, text, media=None):
                 rating = int(m_r.group(1))
                 break
 
-    # Find title — first non-junk, non-date line of reasonable length
+    # Find title � first non-junk, non-date line of reasonable length
     title = ""
     remaining_lines = [l for l in lines if not is_junk(l) and not month_re.search(l)]
     for l in remaining_lines:
@@ -789,7 +795,7 @@ def parse_flipkart_card(rating, text, media=None):
             title = l
             break
 
-    # Body — everything after title, excluding junk and date lines
+    # Body � everything after title, excluding junk and date lines
     body_lines, seen_b = [], set()
     for l in lines:
         if is_junk(l) or month_re.search(l) or l == title:
@@ -802,7 +808,7 @@ def parse_flipkart_card(rating, text, media=None):
             body_lines.append(l)
     body = " ".join(body_lines)
 
-    # Reviewer name — line just before date, short, not junk
+    # Reviewer name � line just before date, short, not junk
     reviewer = ""
     if date_str:
         idx = next((i for i, l in enumerate(lines) if l == date_str), -1)
@@ -874,7 +880,7 @@ async def scrape_flipkart(url: str, until_date=None):
         # Visit homepage, close any popup
         await page.goto("https://www.flipkart.com/", wait_until="domcontentloaded", timeout=60_000)
         await asyncio.sleep(random.uniform(3, 5))
-        for txt in ["✕", "×", "Close", "close"]:
+        for txt in ["?", "�", "Close", "close"]:
             try:
                 await page.get_by_text(txt, exact=True).first.click(timeout=1500)
                 break
@@ -997,7 +1003,7 @@ def build_flipkart_excel(reviews: list, product_url: str = "") -> bytes:
         ("Scrape Date",              datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ("Reviews Scraped",          len(reviews)),
         ("Average Rating (scraped)", avg),
-        ("Date Range",               f"{date_vals[0]} → {date_vals[-1]}" if date_vals else ""),
+        ("Date Range",               f"{date_vals[0]} ? {date_vals[-1]}" if date_vals else ""),
     ]
     for r_idx, (field, val) in enumerate(summary_rows, 1):
         ws2.cell(row=r_idx, column=1, value=field)
@@ -1011,9 +1017,9 @@ def build_flipkart_excel(reviews: list, product_url: str = "") -> bytes:
     return buf.read()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 # API Endpoints
-# ══════════════════════════════════════════════════════════════════════════════
+# ------------------------------------------------------------------------------
 
 @app.get("/health")
 async def health():
@@ -1092,6 +1098,7 @@ async def scrape_flipkart_endpoint(req: ScrapeRequest):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
 
 
 
